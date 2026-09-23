@@ -24,6 +24,20 @@ jobs:
       - name: Create Android platform
         run: flutter create . --platforms=android --org pl.gekogroup --project-name geko_fleet
 
+      - name: Enable Android internet access
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path("android/app/src/main/AndroidManifest.xml")
+          s = p.read_text()
+          permission = '<uses-permission android:name="android.permission.INTERNET"/>'
+          if permission not in s:
+              s = s.replace("<manifest", "<manifest", 1)
+              end = s.find(">")
+              s = s[:end+1] + "\n    " + permission + s[end+1:]
+          p.write_text(s)
+          PY
+
       - name: Install dependencies
         run: flutter pub get
 
