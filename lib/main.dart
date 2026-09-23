@@ -18,7 +18,25 @@ class LoginPage extends StatefulWidget{const LoginPage({super.key});@override St
 class _LoginPageState extends State<LoginPage>{
  final email=TextEditingController(),password=TextEditingController();bool busy=false;
  Future<void> login()async{setState(()=>busy=true);try{await db.auth.signInWithPassword(email:email.text.trim(),password:password.text);if(mounted)Navigator.pushReplacement(context,MaterialPageRoute(builder:(_)=>const RoleGate()));}on AuthException catch(e){if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(e.message)));}finally{if(mounted)setState(()=>busy=false);}}
- @override Widget build(BuildContext c)=>Scaffold(body:SafeArea(child:Center(child:SingleChildScrollView(padding:const EdgeInsets.all(24),child:Column(children:[const Icon(Icons.local_shipping,size:72),const SizedBox(height:12),const Text('GEKO Fleet',style:TextStyle(fontSize:32,fontWeight:FontWeight.bold)),const SizedBox(height:32),TextField(controller:email,keyboardType:TextInputType.emailAddress,decoration:const InputDecoration(labelText:'E-mail',border:OutlineInputBorder())),const SizedBox(height:14),TextField(controller:password,obscureText:true,decoration:const InputDecoration(labelText:'Hasło',border:OutlineInputBorder())),const SizedBox(height:20),SizedBox(width:double.infinity,child:FilledButton(onPressed:busy?null:login,child:Text(busy?'Logowanie...':'Zaloguj się')))])))));
+ @override Widget build(BuildContext c)=>Scaffold(body:SafeArea(child:Center(child:SingleChildScrollView(padding:const EdgeInsets.all(24),child:Column(children:[const Icon(Icons.local_shipping,size:72),const SizedBox(height:12),const Text('GEKO Fleet',style:TextStyle(fontSize:32,fontWeight:FontWeight.bold)),const SizedBox(height:32),TextField(controller:email,keyboardType:TextInputType.emailAddress,decoration:const InputDecoration(labelText:'E-mail',border:OutlineInputBorder())),const SizedBox(height:14),TextField(controller:password,obscureText:true,decoration:const InputDecoration(labelText:'Hasło',border:OutlineInputBorder())),const SizedBox(height:20),SizedBox(width:double.infinity,child:FilledButton(onPressed:busy?null:login,child:Text(busy?'Logowanie...':'Zaloguj się'))),const SizedBox(height:8),SizedBox(width:double.infinity,child:TextButton(onPressed:busy?null:()=>Navigator.push(c,MaterialPageRoute(builder:(_)=>const RegisterPage())),child:const Text('Nie masz konta? Zarejestruj się')))])))));
+}
+
+class RegisterPage extends StatefulWidget{const RegisterPage({super.key});@override State<RegisterPage> createState()=>_RegisterPageState();}
+class _RegisterPageState extends State<RegisterPage>{
+ final name=TextEditingController(),email=TextEditingController(),password=TextEditingController(),repeat=TextEditingController();bool busy=false;
+ Future<void> register()async{
+  if(name.text.trim().length<2){ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Podaj imię i nazwisko.')));return;}
+  if(password.text.length<6){ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Hasło musi mieć co najmniej 6 znaków.')));return;}
+  if(password.text!=repeat.text){ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Hasła nie są takie same.')));return;}
+  setState(()=>busy=true);
+  try{
+   final res=await db.auth.signUp(email:email.text.trim(),password:password.text,data:{'full_name':name.text.trim()});
+   if(!mounted)return;
+   if(res.session!=null){Navigator.pushAndRemoveUntil(context,MaterialPageRoute(builder:(_)=>const RoleGate()),(_)=>false);}
+   else{ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Konto utworzone. Sprawdź e-mail i potwierdź rejestrację, a następnie się zaloguj.')));Navigator.pop(context);}
+  }on AuthException catch(e){if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(e.message)));}finally{if(mounted)setState(()=>busy=false);}
+ }
+ @override Widget build(BuildContext c)=>Scaffold(appBar:AppBar(title:const Text('Rejestracja')),body:SafeArea(top:false,child:ListView(padding:const EdgeInsets.fromLTRB(24,24,24,32),children:[const Text('Utwórz konto GEKO Fleet',style:TextStyle(fontSize:26,fontWeight:FontWeight.bold)),const SizedBox(height:8),const Text('Nowe konto otrzymuje rolę kuriera. Administrator może później zmienić rolę na koordynatora lub administratora.'),const SizedBox(height:24),TextField(controller:name,textCapitalization:TextCapitalization.words,decoration:const InputDecoration(labelText:'Imię i nazwisko',border:OutlineInputBorder())),const SizedBox(height:14),TextField(controller:email,keyboardType:TextInputType.emailAddress,decoration:const InputDecoration(labelText:'E-mail',border:OutlineInputBorder())),const SizedBox(height:14),TextField(controller:password,obscureText:true,decoration:const InputDecoration(labelText:'Hasło',border:OutlineInputBorder())),const SizedBox(height:14),TextField(controller:repeat,obscureText:true,decoration:const InputDecoration(labelText:'Powtórz hasło',border:OutlineInputBorder())),const SizedBox(height:20),FilledButton.icon(onPressed:busy?null:register,icon:const Icon(Icons.person_add),label:Text(busy?'Tworzenie konta...':'Zarejestruj się'))])));
 }
 
 class RoleGate extends StatefulWidget{const RoleGate({super.key});@override State<RoleGate> createState()=>_RoleGateState();}
