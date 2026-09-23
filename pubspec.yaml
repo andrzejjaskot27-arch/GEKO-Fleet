@@ -1,7 +1,7 @@
 name: geko_fleet
 description: GEKO Fleet - zarzadzanie flota
 publish_to: 'none'
-version: 0.8.1+9
+version: 0.8.2+10
 environment:
   sdk: '>=3.3.0 <4.0.0'
 dependencies:
@@ -9,6 +9,7 @@ dependencies:
     sdk: flutter
   cupertino_icons: ^1.0.8
   supabase_flutter: ^2.9.1
+  image_picker: ^1.1.2
 dev_dependencies:
   flutter_test:
     sdk: flutter
