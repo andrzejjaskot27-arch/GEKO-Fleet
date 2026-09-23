@@ -1,4 +1,6 @@
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 const supabaseUrl='https://kaufyqvgodcyagygzvyb.supabase.co';
@@ -40,17 +42,45 @@ class _CourierHomeState extends State<CourierHome>{
  ])));
 }
 
+class PhotoPicker extends StatelessWidget{
+ const PhotoPicker({super.key,required this.photos,required this.onAdd,required this.onRemove});
+ final List<XFile> photos; final Future<void> Function(ImageSource) onAdd; final void Function(int) onRemove;
+ @override Widget build(BuildContext context)=>Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+  Wrap(spacing:8,runSpacing:8,children:[
+   OutlinedButton.icon(onPressed:()=>onAdd(ImageSource.camera),icon:const Icon(Icons.photo_camera),label:const Text('Zrób zdjęcie')),
+   OutlinedButton.icon(onPressed:()=>onAdd(ImageSource.gallery),icon:const Icon(Icons.photo_library),label:const Text('Galeria')),
+  ]),
+  if(photos.isNotEmpty)...[const SizedBox(height:8),...List.generate(photos.length,(i)=>ListTile(contentPadding:EdgeInsets.zero,leading:const Icon(Icons.image),title:Text('Zdjęcie ${i+1}'),subtitle:Text(photos[i].name,overflow:TextOverflow.ellipsis),trailing:IconButton(icon:const Icon(Icons.close),onPressed:()=>onRemove(i))))],
+ ]);
+}
+
+Future<List<String>> uploadVehiclePhotos(List<XFile> photos,String kind)async{
+ final uid=db.auth.currentUser!.id; final paths=<String>[];
+ for(var i=0;i<photos.length;i++){
+  final Uint8List bytes=await photos[i].readAsBytes();
+  final ext=photos[i].name.contains('.')?photos[i].name.split('.').last.toLowerCase():'jpg';
+  final path='$uid/$kind/${DateTime.now().microsecondsSinceEpoch}_$i.$ext';
+  await db.storage.from('vehicle-photos').uploadBinary(path,bytes,fileOptions:const FileOptions(upsert:false));
+  paths.add(path);
+ }
+ return paths;
+}
+
 class VehicleCheckPage extends StatefulWidget{const VehicleCheckPage({super.key,required this.vehicle});final Map<String,dynamic> vehicle;@override State<VehicleCheckPage> createState()=>_VehicleCheckPageState();}
 class _VehicleCheckPageState extends State<VehicleCheckPage>{
- final note=TextEditingController();bool busy=false;
+ final note=TextEditingController();bool busy=false;final picker=ImagePicker();final List<XFile> photos=[];
  final Map<String,bool> checks={'Poziom oleju':true,'Płyn chłodniczy':true,'Płyn do spryskiwaczy':true,'Opony':true,'Światła':true,'Nadwozie – widoczne uszkodzenia':true,'Kontrolki na desce':true};
  bool get hasProblem=>checks.values.any((v)=>!v);
+ bool get bodyProblem=>checks['Nadwozie – widoczne uszkodzenia']==false;
+ Future<void> addPhoto(ImageSource source)async{final p=await picker.pickImage(source:source,imageQuality:75,maxWidth:1600);if(p!=null&&mounted)setState(()=>photos.add(p));}
  Future<void> save()async{
   if(hasProblem&&note.text.trim().isEmpty){ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Przy wykrytym problemie dodaj krótki opis.')));return;}
+  if(bodyProblem&&photos.isEmpty){ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Przy uszkodzeniu nadwozia dodaj co najmniej jedno zdjęcie.')));return;}
   setState(()=>busy=true);
   try{
    final uid=db.auth.currentUser!.id;final sessions=await db.from('vehicle_sessions').select('id').eq('courier_id',uid).eq('vehicle_id',widget.vehicle['id']).isFilter('ended_at',null).limit(1);
-   await db.from('vehicle_checks').insert({'vehicle_id':widget.vehicle['id'],'courier_id':uid,'session_id':sessions.isEmpty?null:sessions.first['id'],'engine_oil_ok':checks['Poziom oleju'],'coolant_ok':checks['Płyn chłodniczy'],'washer_fluid_ok':checks['Płyn do spryskiwaczy'],'tires_ok':checks['Opony'],'lights_ok':checks['Światła'],'body_ok':checks['Nadwozie – widoczne uszkodzenia'],'dashboard_ok':checks['Kontrolki na desce'],'note':note.text.trim().isEmpty?null:note.text.trim()});
+   final photoPaths=await uploadVehiclePhotos(photos,'checks');
+   await db.from('vehicle_checks').insert({'vehicle_id':widget.vehicle['id'],'courier_id':uid,'session_id':sessions.isEmpty?null:sessions.first['id'],'engine_oil_ok':checks['Poziom oleju'],'coolant_ok':checks['Płyn chłodniczy'],'washer_fluid_ok':checks['Płyn do spryskiwaczy'],'tires_ok':checks['Opony'],'lights_ok':checks['Światła'],'body_ok':checks['Nadwozie – widoczne uszkodzenia'],'dashboard_ok':checks['Kontrolki na desce'],'note':note.text.trim().isEmpty?null:note.text.trim(),'photo_paths':photoPaths});
    if(mounted){ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Kontrola została zapisana')));Navigator.pop(context);}
   }catch(e){if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text('Nie udało się zapisać kontroli: $e')));}finally{if(mounted)setState(()=>busy=false);}
  }
@@ -58,14 +88,15 @@ class _VehicleCheckPageState extends State<VehicleCheckPage>{
   Card(child:ListTile(leading:const Icon(Icons.local_shipping),title:Text("${widget.vehicle['registration']} • ${widget.vehicle['name']}"))),
   const SizedBox(height:10),const Text('Sprawdź każdy punkt. Jeśli coś jest nie tak, wybierz „Problem”.',style:TextStyle(fontSize:16)),const SizedBox(height:12),
   ...checks.keys.map((k)=>Card(child:ListTile(title:Text(k,style:const TextStyle(fontWeight:FontWeight.w600)),trailing:SegmentedButton<bool>(segments:const [ButtonSegment(value:true,label:Text('OK'),icon:Icon(Icons.check)),ButtonSegment(value:false,label:Text('Problem'),icon:Icon(Icons.warning_amber))],selected:{checks[k]!},onSelectionChanged:(s)=>setState(()=>checks[k]=s.first))))),
-  if(hasProblem)...[const SizedBox(height:12),TextField(controller:note,minLines:3,maxLines:6,decoration:const InputDecoration(labelText:'Krótki opis problemu *',hintText:'Co zauważyłeś?',border:OutlineInputBorder())),const SizedBox(height:8),const Text('Zdjęcie problemu dodamy w następnym kroku; przy uszkodzeniu nadwozia będzie obowiązkowe.',style:TextStyle(color:Colors.orangeAccent))],
+  if(hasProblem)...[const SizedBox(height:12),TextField(controller:note,minLines:3,maxLines:6,decoration:const InputDecoration(labelText:'Krótki opis problemu *',hintText:'Co zauważyłeś?',border:OutlineInputBorder())),const SizedBox(height:12),Text(bodyProblem?'Zdjęcie uszkodzenia nadwozia jest obowiązkowe.':'Zdjęcie problemu jest opcjonalne.',style:TextStyle(color:bodyProblem?Colors.orangeAccent:null)),const SizedBox(height:8),PhotoPicker(photos:photos,onAdd:addPhoto,onRemove:(i)=>setState(()=>photos.removeAt(i)))],
   const SizedBox(height:18),FilledButton.icon(onPressed:busy?null:save,icon:const Icon(Icons.save),label:Text(busy?'Zapisywanie...':'Zapisz kontrolę'))
  ]));
 }
 
 class AddFaultPage extends StatefulWidget{const AddFaultPage({super.key,required this.vehicle});final Map<String,dynamic> vehicle;@override State<AddFaultPage> createState()=>_AddFaultPageState();}
 class _AddFaultPageState extends State<AddFaultPage>{
- final title=TextEditingController(),description=TextEditingController();bool busy=false;
- Future<void> save()async{if(title.text.trim().length<2||description.text.trim().length<2){ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Uzupełnij rodzaj i opis usterki')));return;}setState(()=>busy=true);try{await db.from('faults').insert({'vehicle_id':widget.vehicle['id'],'reported_by':db.auth.currentUser!.id,'title':title.text.trim(),'description':description.text.trim()});if(mounted){ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Usterka została zgłoszona')));Navigator.pop(context);}}catch(e){if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text('Nie udało się zapisać: $e')));}finally{if(mounted)setState(()=>busy=false);}}
- @override Widget build(BuildContext c)=>Scaffold(appBar:AppBar(title:const Text('Zgłoś usterkę')),body:ListView(padding:const EdgeInsets.all(16),children:[Card(child:ListTile(leading:const Icon(Icons.local_shipping),title:Text("${widget.vehicle['registration']} • ${widget.vehicle['name']}"))),const SizedBox(height:16),TextField(controller:title,decoration:const InputDecoration(labelText:'Rodzaj usterki',hintText:'np. uszkodzony zderzak',border:OutlineInputBorder())),const SizedBox(height:16),TextField(controller:description,minLines:4,maxLines:8,decoration:const InputDecoration(labelText:'Krótki opis',hintText:'Opisz problem lub uszkodzenie',alignLabelWithHint:true,border:OutlineInputBorder())),const SizedBox(height:12),const Card(child:ListTile(leading:Icon(Icons.add_a_photo),title:Text('Zdjęcia uszkodzenia'),subtitle:Text('Obsługę zdjęć dodamy razem z Supabase Storage.'))),const SizedBox(height:20),FilledButton.icon(onPressed:busy?null:save,icon:const Icon(Icons.send),label:Text(busy?'Zapisywanie...':'Wyślij zgłoszenie'))]));
+ final title=TextEditingController(),description=TextEditingController();bool busy=false;final picker=ImagePicker();final List<XFile> photos=[];
+ Future<void> addPhoto(ImageSource source)async{if(photos.length>=5){ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Możesz dodać maksymalnie 5 zdjęć.')));return;}final p=await picker.pickImage(source:source,imageQuality:75,maxWidth:1600);if(p!=null&&mounted)setState(()=>photos.add(p));}
+ Future<void> save()async{if(title.text.trim().length<2||description.text.trim().length<2){ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Uzupełnij rodzaj i opis usterki')));return;}setState(()=>busy=true);try{final photoPaths=await uploadVehiclePhotos(photos,'faults');await db.from('faults').insert({'vehicle_id':widget.vehicle['id'],'reported_by':db.auth.currentUser!.id,'title':title.text.trim(),'description':description.text.trim(),'photo_paths':photoPaths});if(mounted){ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Usterka została zgłoszona')));Navigator.pop(context);}}catch(e){if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text('Nie udało się zapisać: $e')));}finally{if(mounted)setState(()=>busy=false);}}
+ @override Widget build(BuildContext c)=>Scaffold(appBar:AppBar(title:const Text('Zgłoś usterkę')),body:ListView(padding:const EdgeInsets.all(16),children:[Card(child:ListTile(leading:const Icon(Icons.local_shipping),title:Text("${widget.vehicle['registration']} • ${widget.vehicle['name']}"))),const SizedBox(height:16),TextField(controller:title,decoration:const InputDecoration(labelText:'Rodzaj usterki',hintText:'np. uszkodzony zderzak',border:OutlineInputBorder())),const SizedBox(height:16),TextField(controller:description,minLines:4,maxLines:8,decoration:const InputDecoration(labelText:'Krótki opis',hintText:'Opisz problem lub uszkodzenie',alignLabelWithHint:true,border:OutlineInputBorder())),const SizedBox(height:12),const Text('Zdjęcia uszkodzenia (opcjonalnie, maks. 5)',style:TextStyle(fontWeight:FontWeight.bold)),const SizedBox(height:8),PhotoPicker(photos:photos,onAdd:addPhoto,onRemove:(i)=>setState(()=>photos.removeAt(i))),const SizedBox(height:20),FilledButton.icon(onPressed:busy?null:save,icon:const Icon(Icons.send),label:Text(busy?'Zapisywanie...':'Wyślij zgłoszenie'))]));
 }
