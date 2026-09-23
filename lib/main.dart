@@ -35,7 +35,7 @@ class _FleetShellState extends State<FleetShell> {
     Vehicle('Ford Transit','DW 7GEKO',228500,driver:'A. Nowak',status:'Usterka'),
     Vehicle('Opel Movano','DW 2GEKO',194820,driver:'P. Wiśniewski'),
   ];
-  final faults=<String>['DW 7GEKO • Hamulce / zawieszenie'];
+  final faults=<Fault>[Fault('DW 7GEKO','Hamulce / zawieszenie','Auto ściąga przy hamowaniu','A. Nowak')];
   final costs=<double>[];
   final inspections=<String,String>{};
 
@@ -43,7 +43,7 @@ class _FleetShellState extends State<FleetShell> {
     final pages=[
       Dashboard(vehicles:vehicles,faults:faults,costs:costs),
       FleetPage(vehicles:vehicles,onChanged:()=>setState((){})),
-      FaultPage(faults:faults,onAdd:()=>setState(()=>faults.insert(0,'DW 4GEKO • Nowa usterka'))),
+      FaultPage(faults:faults,vehicles:vehicles,onChanged:()=>setState((){})),
       CostPage(costs:costs,onAdd:()=>setState(()=>costs.add(250))),
       MorePage(vehicles:vehicles,inspections:inspections,onChanged:()=>setState((){})),
     ];
@@ -66,7 +66,7 @@ class _FleetShellState extends State<FleetShell> {
 
 class Dashboard extends StatelessWidget {
   const Dashboard({super.key,required this.vehicles,required this.faults,required this.costs});
-  final List<Vehicle> vehicles; final List<String> faults; final List<double> costs;
+  final List<Vehicle> vehicles; final List<Fault> faults; final List<double> costs;
   @override Widget build(BuildContext c) {
     final total=costs.fold<double>(0,(a,b)=>a+b);
     return ListView(padding:const EdgeInsets.all(16),children:[
