@@ -38,7 +38,7 @@ class _CourierHomeState extends State<CourierHome>{
  SizedBox(width:double.infinity,child:OutlinedButton.icon(onPressed:()=>Navigator.push(c,MaterialPageRoute(builder:(_)=>AddFaultPage(vehicle:selected!))),icon:const Icon(Icons.build),label:const Text('Zgłoś usterkę / uszkodzenie'))),
  ],
  const SizedBox(height:24),const Text('Wybierz pojazd',style:TextStyle(fontSize:20,fontWeight:FontWeight.bold)),const SizedBox(height:8),
- ...vehicles.map((v)=>Card(child:ListTile(leading:const Icon(Icons.directions_car),title:Text("${v['registration']} • ${v['name']}"),subtitle:Text("${v['mileage']} km"),trailing:selected?['id']==v['id']?const Icon(Icons.check_circle):const Icon(Icons.chevron_right),onTap:()=>choose(v))))
+ ...vehicles.map((v)=>Card(child:ListTile(leading:const Icon(Icons.directions_car),title:Text("${v['registration']} • ${v['name']}"),trailing:selected?['id']==v['id']?const Icon(Icons.check_circle):const Icon(Icons.chevron_right),onTap:()=>choose(v))))
  ])));
 }
 
