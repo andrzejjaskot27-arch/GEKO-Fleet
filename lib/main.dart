@@ -25,7 +25,7 @@ class CourierHome extends StatefulWidget{const CourierHome({super.key});@overrid
 class _CourierHomeState extends State<CourierHome>{
  List<Map<String,dynamic>> vehicles=[];Map<String,dynamic>? selected;bool loading=true;
  @override void initState(){super.initState();load();}
- Future<void> load()async{try{final rows=await db.from('vehicles').select('id,registration,name,mileage,status').eq('status','active').order('registration');Map<String,dynamic>? current;final uid=db.auth.currentUser!.id;final sessions=await db.from('vehicle_sessions').select('vehicle_id,vehicles(id,registration,name,mileage,status)').eq('courier_id',uid).isFilter('ended_at',null).limit(1);if(sessions.isNotEmpty&&sessions.first['vehicles']!=null)current=Map<String,dynamic>.from(sessions.first['vehicles']);if(mounted)setState((){vehicles=List<Map<String,dynamic>>.from(rows);selected=current;loading=false;});}catch(e){if(mounted){setState(()=>loading=false);ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text('Błąd pobierania danych: $e')));}}}
+ Future<void> load()async{try{final rows=await db.from('vehicles').select('id,registration,name,mileage,status,vin,production_year,fuel_type,inspection_due,insurance_due').eq('status','active').order('registration');Map<String,dynamic>? current;final uid=db.auth.currentUser!.id;final sessions=await db.from('vehicle_sessions').select('vehicle_id,vehicles(id,registration,name,mileage,status,vin,production_year,fuel_type,inspection_due,insurance_due)').eq('courier_id',uid).isFilter('ended_at',null).limit(1);if(sessions.isNotEmpty&&sessions.first['vehicles']!=null)current=Map<String,dynamic>.from(sessions.first['vehicles']);if(mounted)setState((){vehicles=List<Map<String,dynamic>>.from(rows);selected=current;loading=false;});}catch(e){if(mounted){setState(()=>loading=false);ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text('Błąd pobierania danych: $e')));}}}
  Future<void> choose(Map<String,dynamic> v)async{final uid=db.auth.currentUser!.id;await db.from('vehicle_sessions').update({'ended_at':DateTime.now().toUtc().toIso8601String()}).eq('courier_id',uid).isFilter('ended_at',null);await db.from('vehicle_sessions').insert({'courier_id':uid,'vehicle_id':v['id']});setState(()=>selected=v);}
  Future<void> logout()async{await db.auth.signOut();if(mounted)Navigator.pushAndRemoveUntil(context,MaterialPageRoute(builder:(_)=>const LoginPage()),(_)=>false);}
  @override Widget build(BuildContext c)=>Scaffold(appBar:AppBar(title:const Text('GEKO Fleet',style:TextStyle(fontWeight:FontWeight.bold)),actions:[IconButton(onPressed:logout,icon:const Icon(Icons.logout))]),body:loading?const Center(child:CircularProgressIndicator()):RefreshIndicator(onRefresh:load,child:ListView(padding:const EdgeInsets.all(16),children:[
@@ -38,7 +38,7 @@ class _CourierHomeState extends State<CourierHome>{
  SizedBox(width:double.infinity,child:OutlinedButton.icon(onPressed:()=>Navigator.push(c,MaterialPageRoute(builder:(_)=>AddFaultPage(vehicle:selected!))),icon:const Icon(Icons.build),label:const Text('Zgłoś usterkę / uszkodzenie'))),
  ],
  const SizedBox(height:24),const Text('Wybierz pojazd',style:TextStyle(fontSize:20,fontWeight:FontWeight.bold)),const SizedBox(height:8),
- ...vehicles.map((v)=>Card(child:ListTile(leading:const Icon(Icons.directions_car),title:Text("${v['registration']} • ${v['name']}"),trailing:selected?['id']==v['id']?const Icon(Icons.check_circle):const Icon(Icons.chevron_right),onTap:()=>choose(v))))
+ ...vehicles.map((v)=>Card(child:ListTile(leading:const Icon(Icons.directions_car),title:Text("${v['registration']} • ${v['name']}"),trailing:Wrap(mainAxisSize:MainAxisSize.min,children:[if(selected?['id']==v['id'])const Icon(Icons.check_circle),IconButton(icon:const Icon(Icons.info_outline),onPressed:()=>Navigator.push(c,MaterialPageRoute(builder:(_)=>VehicleDetailsPage(vehicle:v))))]),onTap:()=>choose(v))))
  ])));
 }
 
@@ -64,6 +64,34 @@ Future<List<String>> uploadVehiclePhotos(List<XFile> photos,String kind)async{
   paths.add(path);
  }
  return paths;
+}
+
+class VehicleDetailsPage extends StatelessWidget{
+ const VehicleDetailsPage({super.key,required this.vehicle});
+ final Map<String,dynamic> vehicle;
+ String value(String key)=>vehicle[key]?.toString().trim().isNotEmpty==true?vehicle[key].toString():'—';
+ @override Widget build(BuildContext context)=>Scaffold(
+  appBar:AppBar(title:Text(value('registration'))),
+  body:SafeArea(top:false,child:ListView(padding:const EdgeInsets.all(16),children:[
+   Card(child:Padding(padding:const EdgeInsets.all(18),child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+    const Icon(Icons.local_shipping,size:42),
+    const SizedBox(height:10),
+    Text(value('registration'),style:const TextStyle(fontSize:26,fontWeight:FontWeight.bold)),
+    Text(value('name'),style:const TextStyle(fontSize:18)),
+   ]))),
+   const SizedBox(height:12),
+   _VehicleField(label:'VIN',value:value('vin')),
+   _VehicleField(label:'Rok produkcji',value:value('production_year')),
+   _VehicleField(label:'Rodzaj paliwa',value:value('fuel_type')),
+   _VehicleField(label:'Badanie techniczne do',value:value('inspection_due')),
+   _VehicleField(label:'OC do',value:value('insurance_due')),
+   _VehicleField(label:'Status',value:value('status')),
+  ]))
+ );
+}
+class _VehicleField extends StatelessWidget{
+ const _VehicleField({required this.label,required this.value});final String label,value;
+ @override Widget build(BuildContext context)=>Card(child:ListTile(title:Text(label),subtitle:Text(value,style:const TextStyle(fontSize:17,fontWeight:FontWeight.w600))));
 }
 
 class VehicleCheckPage extends StatefulWidget{const VehicleCheckPage({super.key,required this.vehicle});final Map<String,dynamic> vehicle;@override State<VehicleCheckPage> createState()=>_VehicleCheckPageState();}
